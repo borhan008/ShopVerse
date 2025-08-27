@@ -16,6 +16,16 @@ async function main() {
       password: password,
     },
   });
+
+  await prisma.category.deleteMany({});
+  await prisma.category.createMany({
+    data: [
+      { name: "Electronics", slug: "electronics" },
+      { name: "Books", slug: "books" },
+      { name: "Clothing", slug: "clothing" },
+      { name: "Home & Kitchen", slug: "home-kitchen" },
+    ],
+  });
 }
 
 main()

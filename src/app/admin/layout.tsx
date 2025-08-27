@@ -9,8 +9,8 @@ export default function Layout({ children }: LayoutProps) {
   return (
     <SidebarProvider>
       <AppSidebar />
-      <main>
-        <div className="fixed flex min-w-screen h-[50px]  gap-x-2 items-center border-b">
+      <main className="w-full">
+        <div className="fixed flex min-w-screen h-[50px] z-[10] backdrop-blur-sm  gap-x-2 items-center border-b">
           <SidebarTrigger />
           <h2 className="">Admin Panel</h2>
         </div>
