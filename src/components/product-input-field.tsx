@@ -33,7 +33,7 @@ export function GenericField<T extends FieldValues>({
           <FormControl>
             <Input type={type} placeholder={placeholder} {...field} />
           </FormControl>
-          <FormMessage />
+          <FormMessage className="text-left" />
         </FormItem>
       )}
     />

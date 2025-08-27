@@ -1,3 +1,4 @@
+import { Role } from "@/generated/prisma";
 import { z } from "zod";
 
 export const validateProductSchema = z.object({
@@ -24,3 +25,36 @@ export const validateCategorySchema = z.object({
 });
 
 export type TCategoryFormValues = z.infer<typeof validateCategorySchema>;
+
+export const validateUserLoginSchema = z.object({
+  email: z
+    .string()
+    .trim()
+    .min(1, "Email is required")
+    .email("Invalid email address"),
+  password: z.string().trim().min(6, "Password must be at least 6 characters"),
+});
+export type TUserLoginFormValues = z.infer<typeof validateUserLoginSchema>;
+
+export const validateSignUserSchema = z.object({
+  name: z.string().trim().min(3, "Name is required"),
+  email: z
+    .string()
+    .trim()
+    .min(1, "Email is required")
+    .email("Invalid email address"),
+
+  password: z.string().min(6, "Password must be at least 6 characters"),
+});
+export const validateUserSchema = z.object({
+  name: z.string().trim().min(3, "Name is required"),
+  email: z
+    .string()
+    .trim()
+    .min(1, "Email is required")
+    .email("Invalid email address"),
+
+  password: z.string().min(6, "Password must be at least 6 characters"),
+  role: z.enum(Role).default("USER"),
+});
+export type TUserFormValues = z.infer<typeof validateUserSchema>;

@@ -3,17 +3,18 @@ import bcrypt from "bcrypt";
 
 async function main() {
   console.log("Seeding start database...");
-  await prisma.admin.deleteMany({});
+  await prisma.user.deleteMany({});
 
   const password = await bcrypt.hash(
     "admin123",
     Number(process.env.SALT_ROUNDS) || 10
   );
-  await prisma.admin.create({
+  await prisma.user.create({
     data: {
       name: "Admin",
       email: "admin@mail.com",
       password: password,
+      role: "ADMIN",
     },
   });
 

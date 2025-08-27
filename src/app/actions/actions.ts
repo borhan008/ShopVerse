@@ -1,15 +1,23 @@
 "use server";
 
-import { Product } from "@/generated/prisma";
 import prisma from "@/lib/db";
 import {
   TCategoryFormValues,
   TProductFormValues,
+  TUserFormValues,
+  TUserLoginFormValues,
   validateCategorySchema,
   validateProductSchema,
+  validateUserLoginSchema,
 } from "@/lib/validation";
 import { revalidatePath } from "next/cache";
+import bcrypt from "bcryptjs";
+import { signIn } from "@/lib/auth";
+import { isRedirectError } from "next/dist/client/components/redirect-error";
 
+// Login
+
+// Categirues
 export const getCategories = async () => {
   try {
     const categories = await prisma.category.findMany({
@@ -24,6 +32,7 @@ export const getCategories = async () => {
     throw error;
   }
 };
+// Products
 
 export const createProduct = async (newProduct: TProductFormValues) => {
   try {
@@ -209,5 +218,91 @@ export const deleteCategory = async (id: number) => {
   } catch (error) {
     console.error("Error deleting category", error);
     throw error;
+  }
+};
+
+// Users
+export const login = async (userData: TUserLoginFormValues) => {
+  try {
+    const validateUserData = validateUserLoginSchema.safeParse(userData);
+    if (!validateUserData.success) {
+      console.error("Validation error:", validateUserData.error);
+      throw new Error("Validation failed: " + validateUserData.error.message);
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { email: userData.email },
+    });
+    if (!user) {
+      throw new Error("User email not found");
+    }
+
+    const isPasswordValid = await bcrypt.compare(
+      userData.password,
+      user.password
+    );
+
+    if (!isPasswordValid) {
+      throw new Error("Invalid password");
+    }
+    const res = await signIn("credentials", {
+      redirect: false,
+      email: userData.email,
+      password: userData.password,
+    });
+    return { id: user.id, email: user.email, name: user.name, role: user.role };
+  } catch (error) {
+    if (isRedirectError(error)) {
+      throw error;
+    }
+    console.error("Login error:", error);
+    throw new Error("Login failed: " + error?.message);
+  }
+};
+
+export const signUp = async (userData: TUserFormValues) => {
+  try {
+    const validateUserData = validateUserLoginSchema.safeParse(userData);
+    if (!validateUserData.success) {
+      console.error("Validation error:", validateUserData.error);
+      throw new Error("Validation failed: " + validateUserData.error.message);
+    }
+
+    const existingUser = await prisma.user.findUnique({
+      where: { email: userData.email },
+    });
+    if (existingUser) {
+      throw new Error("User with this email already exists");
+    }
+
+    const hashedPassword = await bcrypt.hash(userData.password, 10);
+
+    const user = await prisma.user.create({
+      data: {
+        name: userData.name,
+        email: userData.email,
+        password: hashedPassword,
+        role: "USER",
+      },
+    });
+
+    const res = await signIn("credentials", {
+      redirect: false,
+      email: userData.email,
+      password: userData.password,
+    });
+    if (res)
+      return {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+      };
+    else throw new Error("Something went wrong during signin");
+  } catch (error) {
+    console.error("Signup error:", error);
+    throw new Error(
+      "Signup failed: " + (error?.message || "Something went wrong")
+    );
   }
 };
