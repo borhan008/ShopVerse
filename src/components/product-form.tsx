@@ -73,7 +73,7 @@ export default function ProductForm() {
         action={async () => {
           const result = await form.trigger();
           if (!result) {
-            console.log("Form is invalid", form.formState.errors);
+            //   console.log("Form is invalid", form.formState.errors);
             return;
           }
 
@@ -141,11 +141,11 @@ export default function ProductForm() {
                         .file(file)
                         .name(`${Date.now()}-${file.name}`)
                         .url(urlResponse.url);
-                      console.log(upload);
+                      //  console.log(upload);
                       field.onChange(upload.cid);
                       setFileUploading(false);
                     } catch (e) {
-                      console.log(e);
+                      //console.log(e);
                       setFileUploading(false);
                     }
                   }}
@@ -154,9 +154,9 @@ export default function ProductForm() {
               {form.getValues("image") && (
                 <div className="mt-2">
                   <Image
-                    src={`https://${
-                      process.env.NEXT_PUBLIC_GATEWAY
-                    }/ipfs/${form.getValues("image")}`}
+                    src={`${process.env.NEXT_PUBLIC_GATEWAY}/${form.getValues(
+                      "image"
+                    )}`}
                     alt="Product Image"
                     width={100}
                     height={100}

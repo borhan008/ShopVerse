@@ -26,6 +26,7 @@ export default function Page() {
         type="category"
         setOpen={setDeleteOpen}
         open={deleteOpen}
+        currentPage={0}
       />
 
       <Table className="border">

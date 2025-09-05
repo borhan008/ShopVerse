@@ -17,12 +17,14 @@ type TDeleteProductAlertProps = {
   open: boolean;
   setOpen: Dispatch<SetStateAction<boolean>>;
   type: "category" | "product";
+  currentPage: number;
 };
 
 export function DeleteProductAlert({
   open,
   setOpen,
   type,
+  currentPage,
 }: TDeleteProductAlertProps) {
   const {
     handleDeleteProduct,
@@ -51,7 +53,7 @@ export function DeleteProductAlert({
           <AlertDialogAction
             onClick={() =>
               type === "product"
-                ? handleDeleteProduct(selectedProduct?.id || 0)
+                ? handleDeleteProduct(selectedProduct?.id || 0, currentPage)
                 : handleDeleteCategory(selectedCategory?.id || 0)
             }
             className="bg-red-600 text-white hover:bg-red-700"

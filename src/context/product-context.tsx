@@ -16,6 +16,7 @@ import {
   fetchProducts,
   updateProduct,
 } from "../app/actions/actions";
+import { setDate } from "date-fns";
 
 type TProductContext = {
   products: Product[];
@@ -26,7 +27,7 @@ type TProductContext = {
   selectedProduct: Product | null;
   setSelectedProduct: React.Dispatch<React.SetStateAction<Product | null>>;
   handleUpdateProduct: (id: number, newProduct: TProductFormValues) => void;
-  handleDeleteProduct: (id: number) => void;
+  handleDeleteProduct: (id: number, currentPage: number) => void;
   handleFetchProduct: (
     skip: number,
     take: number
@@ -35,6 +36,8 @@ type TProductContext = {
   selectedCategory: Category | null;
   setSelectedCategory: React.Dispatch<React.SetStateAction<Category | null>>;
   handleDeleteCategory: (id: number) => Promise<void>;
+  allProducts: Product[];
+  setAllProducts: React.Dispatch<React.SetStateAction<Product[]>>;
 };
 
 type ProductProviderProps = {
@@ -53,6 +56,9 @@ export default function ProductProvider({
   category,
 }: ProductProviderProps) {
   const [open, setOpen] = useState(false);
+
+  const [allProducts, setAllProducts] = useState(data);
+
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [products, setProducts] = useOptimistic(
     data,
@@ -93,20 +99,12 @@ export default function ProductProvider({
       toast.error("Please fill all the fields correctly.");
       return;
     }
-    console.log("Adding new product:", validateProduct.data);
-    const newProd = {
-      ...validateProduct.data,
-      id: products[0].id + 1 || Math.floor(Math.random() * 1000000),
-      slug: "random",
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-    setProducts({
-      action: "add",
-      payload: newProd,
-    });
+    // console.log("Adding new product:", validateProduct.data);
+
     try {
-      await createProduct(validateProduct.data);
+      const newProd = await createProduct(validateProduct.data);
+      setAllProducts((prev) => [newProd, ...prev]);
+      total = total + 1;
       toast.success("Product created successfully!");
     } catch (error) {
       toast.error("Failed to create product");
@@ -123,20 +121,13 @@ export default function ProductProvider({
       toast.error("Please fill all the fields correctly.");
       return;
     }
-    console.log("Updating product:", validateProduct.data);
-    const updatedProd = {
-      ...validateProduct.data,
-      id: id,
-      slug: "random",
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-    setProducts({
-      action: "update",
-      payload: updatedProd,
-    });
+    //  console.log("Updating product:", validateProduct.data);
+
     try {
       await updateProduct(id, validateProduct.data);
+      setAllProducts((prev) =>
+        prev.map((prod) => (prod.id === id ? { ...prod, ...newProduct } : prod))
+      );
       toast.success("Product updated successfully!");
     } catch (error) {
       toast.error("Failed to update product");
@@ -152,13 +143,13 @@ export default function ProductProvider({
       return [];
     }
   };
-  const handleDeleteProduct = async (id: number) => {
+  const handleDeleteProduct = async (id: number, currentPage: number) => {
     try {
-      setProducts({
-        action: "delete",
-        payload: { id },
-      });
       await deleteProduct(id);
+      setAllProducts((prev) => prev.filter((prod) => prod.id !== id));
+      const data = await handleFetchProduct(currentPage - 1, 2);
+      total--;
+      setAllProducts(data || []);
       toast.success("Product deleted successfully!");
     } catch (error) {
       toast.error("Failed to delete product");
@@ -193,6 +184,8 @@ export default function ProductProvider({
         selectedCategory,
         setSelectedCategory,
         handleDeleteCategory,
+        allProducts,
+        setAllProducts,
       }}
     >
       {children}

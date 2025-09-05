@@ -12,12 +12,17 @@ import {
 } from "@/lib/validation";
 import { revalidatePath } from "next/cache";
 import bcrypt from "bcryptjs";
-import { signIn } from "@/lib/auth";
+import { auth, signIn } from "@/lib/auth";
 import { isRedirectError } from "next/dist/client/components/redirect-error";
+import { Category, Product } from "@/generated/prisma";
+import { checkUser } from "@/lib/utils-server";
+import { TCart } from "@/types/types";
+import { stripe } from "@/lib/stripe";
+import { redirect } from "next/navigation";
 
 // Login
 
-// Categirues
+// Categories
 export const getCategories = async () => {
   try {
     const categories = await prisma.category.findMany({
@@ -51,7 +56,8 @@ export const createProduct = async (newProduct: TProductFormValues) => {
         slug: slug,
       },
     });
-    // revalidatePath("/admin/products");
+
+    revalidatePath("/admin/products");
     console.error("data:", product);
 
     return product;
@@ -73,7 +79,7 @@ export const updateProduct = async (
     }
     let slug = newProduct.name.toLowerCase().replace(/\s+/g, "-");
     while (await prisma.product.findUnique({ where: { slug: slug } })) {
-      console.log(slug);
+      //console.log(slug);
       slug += `-${Math.floor(Math.random() * 1000)}`;
     }
     const product = await prisma.product.update({
@@ -109,21 +115,100 @@ export const deleteProduct = async (id: number) => {
   }
 };
 
-export const fetchProducts = async (skip: number, perPage: number) => {
+export const fetchProducts = async (
+  skip: number,
+  perPage: number,
+  category?: string,
+  search?: string
+) => {
   try {
+    let where = {
+      AND: [] as {}[],
+    };
+
+    if (category) {
+      where.AND.push({
+        category: {
+          OR: [] as { id: number }[],
+        },
+      });
+      let cat = await prisma.category.findUnique({
+        where: { slug: category },
+        select: {
+          id: true,
+          parentId: true,
+        },
+      });
+      if (!cat) {
+        return {
+          products: [],
+          total: 0,
+        };
+      }
+      let q = [] as Number[];
+      q.push(cat?.id);
+
+      while (q.length) {
+        const x = q.pop();
+
+        if (!x) break;
+
+        where.AND.at(0)?.category?.OR.push({ id: x });
+
+        const res = await prisma.category.findMany({
+          select: {
+            id: true,
+          },
+          where: {
+            parentId: x,
+          },
+        });
+
+        res.forEach((r) => q.push(r.id));
+      }
+    }
+    if (search) {
+      where.AND.push({
+        OR: [
+          { description: { contains: search || "" } },
+          { name: { contains: search || "" } },
+        ],
+      });
+    }
+
+    console.log(where);
     const products = await prisma.product.findMany({
       skip: skip * perPage,
       take: perPage,
-
+      where,
       orderBy: {
         id: "desc",
       },
     });
-    const total = await prisma.product.count();
+
+    const total = await prisma.product.count({
+      where,
+    });
     return { products: products, total: total };
   } catch (error) {
     console.error("Error fetching products:", error);
     throw error;
+  }
+};
+
+export const fetchProductBySlug = async (slug: string) => {
+  try {
+    const product = await prisma.product.findUnique({
+      where: {
+        slug,
+      },
+    });
+
+    return {
+      product: product,
+    };
+  } catch (error) {
+    throw new Error("Can't find this.");
   }
 };
 
@@ -221,6 +306,62 @@ export const deleteCategory = async (id: number) => {
   }
 };
 
+export const fetchCategoriesSorted = async () => {
+  try {
+    const categories = await prisma.category.findMany({
+      orderBy: {
+        id: "asc",
+      },
+    });
+
+    const mp = new Map();
+    const adj = new Map();
+    for (let i = 0; i < categories.length; i++) {
+      mp.set(categories[i].id, i);
+      if (!adj.has(categories[i].id)) adj.set(categories[i].id, []);
+      if (categories[i].parentId != 0) {
+        adj.get(categories[i].parentId).push(categories[i].id);
+      }
+    }
+    let visited = new Array(categories.length + 2).fill(false);
+
+    console.log(mp, adj);
+    let sortedCategories = [];
+
+    const dfs = (i: number, parent: any) => {
+      if (visited[mp.get(i)]) return;
+      visited[mp.get(i)] = true;
+
+      if (!parent?.hasOwnProperty("child")) {
+        parent.child = [];
+      }
+      for (let child of adj.get(i)) {
+        if (!visited[mp.get(child)]) {
+          console.log(child, i);
+          parent.child.push(categories[mp.get(child)]);
+          const parent2 = parent.child[parent.child.length - 1];
+          dfs(child, parent2);
+        }
+      }
+    };
+    for (let i = 0; i < categories.length; i++) {
+      if (categories[i].parentId == 0) {
+        sortedCategories.push(categories[i]);
+        const parent = sortedCategories.find(
+          (cat: Category) => cat.id === categories[i].id
+        );
+        dfs(categories[i].id, parent);
+      }
+    }
+
+    console.log(sortedCategories);
+    return { sortedCategories, categories };
+  } catch (error) {
+    console.error("Error fetching sorted categories", error);
+    throw error;
+  }
+};
+
 // Users
 export const login = async (userData: TUserLoginFormValues) => {
   try {
@@ -304,5 +445,308 @@ export const signUp = async (userData: TUserFormValues) => {
     throw new Error(
       "Signup failed: " + (error?.message || "Something went wrong")
     );
+  }
+};
+
+// Add to Cart
+export const addToCart = async (productId: number, quantity: number) => {
+  const session = await checkUser();
+  if (!session) {
+    return {
+      message: "You must be logged in to add to cart",
+      success: false,
+    };
+  }
+  try {
+    const checkProduct = await prisma.product.findUnique({
+      where: { id: productId },
+      select: { stock: true },
+    });
+    if (!checkProduct) {
+      return {
+        message: "Product not found",
+        success: false,
+      };
+    }
+    if (checkProduct.stock < quantity) {
+      return {
+        message: "Not enough stock",
+        success: false,
+      };
+    }
+
+    const cartItem = await prisma.cart.findUnique({
+      where: {
+        userId_productId: {
+          userId: session.user.id,
+          productId: productId,
+        },
+      },
+    });
+    if (cartItem) {
+      if (checkProduct.stock < cartItem.quantity + quantity) {
+        //  console.log(cartItem.quantity, quantity);
+
+        return {
+          message: "Not enough stock. You might already have some in cart",
+          success: false,
+        };
+      }
+      await prisma.cart.update({
+        where: {
+          userId_productId: {
+            userId: session.user.id,
+            productId: productId,
+          },
+        },
+        data: { quantity: cartItem.quantity + quantity },
+      });
+    } else {
+      await prisma.cart.create({
+        data: {
+          userId: session.user.id,
+          productId: productId,
+          quantity: quantity,
+        },
+      });
+    }
+
+    return {
+      message: "Product added to cart",
+      success: true,
+    };
+  } catch (error) {
+    console.error("Error adding to cart", error);
+    return {
+      message: "Something went wrong",
+      success: false,
+    };
+  }
+};
+
+export const fetchCartItems = async () => {
+  const session = await checkUser();
+  if (!session) {
+    return {
+      cartItems: [],
+      total: 0,
+      message: "You must be logged in to view cart",
+      success: false,
+    };
+  }
+  try {
+    const cartItems = await prisma.cart.findMany({
+      where: { userId: session.user.id },
+      include: { product: true },
+    });
+
+    return {
+      cartItems,
+      message: "Cart items fetched",
+      success: true,
+    };
+  } catch (error) {
+    console.error("Error fetching cart items", error);
+    return {
+      cartItems: [],
+      total: 0,
+      message: "Something went wrong",
+      success: false,
+    };
+  }
+};
+
+export const deleteCartItem = async (productId: number) => {
+  const session = await checkUser();
+  if (!session) {
+    return {
+      cartItems: [],
+      total: 0,
+      message: "You must be logged in to view cart",
+      success: false,
+    };
+  }
+
+  try {
+    const findCart = await prisma.cart.delete({
+      where: {
+        userId_productId: {
+          userId: session.user.id,
+          productId: productId,
+        },
+      },
+    });
+    return {
+      success: true,
+      message: "Deleted successfully",
+    };
+  } catch (error) {
+    return {
+      success: true,
+      message: "Something went wrong.",
+    };
+  }
+};
+
+export const updateCartItems = async (carts: TCart[]) => {
+  const session = await checkUser();
+  if (!session) {
+    return {
+      cartItems: [],
+      total: 0,
+      message: "You must be logged in to view cart",
+      success: false,
+    };
+  }
+
+  try {
+    carts.forEach(async (cart) => {
+      await prisma.cart.update({
+        where: {
+          userId_productId: {
+            userId: session.user.id,
+            productId: cart.productId,
+          },
+        },
+        data: { quantity: cart.quantity },
+      });
+    });
+    return {
+      success: true,
+      message: "Updated carts.",
+    };
+  } catch (error) {
+    return {
+      success: false,
+      message: "Something went wrong.",
+    };
+  }
+};
+
+// Strip Payment
+
+export const checkoutSession = async (cartItems: TCart[]) => {
+  const session = await checkUser();
+  if (!session) {
+    return {
+      message: "You must be logged in to checkout",
+      success: false,
+    };
+  }
+  const stripeCheckout = await stripe.checkout.sessions.create({
+    customer_email: session.user.email,
+    metadata: {
+      type: "cart",
+      productsId: cartItems.map((item) => item.productId).join(","),
+    },
+    line_items: cartItems.map((item) => ({
+      price_data: {
+        currency: "usd",
+
+        product_data: {
+          name: item.product.slug,
+          description: item.product.name,
+          images: [`${process.env.NEXT_PUBLIC_GATEWAY}/${item.product.image}`],
+        },
+
+        unit_amount: item.product.price * 100,
+      },
+
+      quantity: item.quantity,
+    })),
+
+    mode: "payment",
+    success_url: `${process.env.CANONICAL_URL}/payment?success=true`,
+    cancel_url: `${process.env.CANONICAL_URL}/payment?cancelled=false`,
+    shipping_address_collection: { allowed_countries: ["BD", "CA", "GB"] },
+  });
+  if (stripeCheckout.url) redirect(stripeCheckout.url);
+};
+
+export const buyNowCheckout = async (productId: number, quantity: number) => {
+  const session = await checkUser();
+  if (!session) {
+    return {
+      message: "You must be logged in to checkout",
+      success: false,
+    };
+  }
+
+  const product = await prisma.product.findUnique({
+    where: { id: productId },
+  });
+  if (!product) {
+    return {
+      message: "Product not found",
+      success: false,
+    };
+  }
+  const stripeCheckout = await stripe.checkout.sessions.create({
+    customer_email: session.user.email,
+    metadata: {
+      type: "buynow",
+    },
+    line_items: [
+      {
+        price_data: {
+          currency: "usd",
+
+          product_data: {
+            name: product.slug,
+            description: product.name,
+            images: [`${process.env.NEXT_PUBLIC_GATEWAY}/${product.image}`],
+          },
+
+          unit_amount: product.price * 100,
+        },
+
+        quantity: quantity,
+      },
+    ],
+
+    mode: "payment",
+    success_url: `${process.env.CANONICAL_URL}/payment?success=true`,
+    cancel_url: `${process.env.CANONICAL_URL}/payment?cancelled=false`,
+    shipping_address_collection: { allowed_countries: ["BD", "CA", "GB"] },
+  });
+  if (stripeCheckout.url) redirect(stripeCheckout.url);
+};
+
+// Orders
+
+export const fetchOrders = async () => {
+  const session = await checkUser();
+  if (!session) {
+    return {
+      success: false,
+      message: "You're unauthorized.",
+      data: [],
+    };
+  }
+
+  try {
+    const orders = await prisma.order.findMany({
+      where: {
+        userId: session.user.id,
+      },
+      include: {
+        items: {
+          include: {
+            product: true,
+          },
+        },
+      },
+    });
+
+    return {
+      success: true,
+      data: orders || [],
+      message: "Orders fetched succesfully.",
+    };
+  } catch (error) {
+    return {
+      success: false,
+      message: "Something went wrong.",
+    };
   }
 };

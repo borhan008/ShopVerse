@@ -51,7 +51,7 @@ export default function DashbaordHeading({ type }: { type: string }) {
   }
 
   if (type.toLowerCase() === "category") {
-    const { open, setOpen } = useProductContext();
+    const { open, setOpen, setSelectedCategory } = useProductContext();
 
     return (
       <div className="flex items-center w-full justify-between">
@@ -59,6 +59,7 @@ export default function DashbaordHeading({ type }: { type: string }) {
         <Button
           variant="outline"
           onClick={() => {
+            setSelectedCategory(null);
             setOpen(true);
           }}
         >

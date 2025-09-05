@@ -62,7 +62,6 @@ model Product{
 }
 
 model Cart{
-  id Int @id @default(autoincrement())
   userId String
   productId Int
   quantity Int @default(1)
@@ -70,6 +69,7 @@ model Cart{
   updatedAt DateTime @updatedAt
   user User @relation(fields: [userId], references: [id])
   product Product @relation(fields: [productId], references: [id])
+  @@unique([userId, productId])
 }
 
 enum OrderStatus {
@@ -87,7 +87,9 @@ model Order {
   status OrderStatus @default(PENDING)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  address String
   items OrderItem[]
+  paymentId String?
   user User @relation(fields: [userId], references: [id])
 }
 

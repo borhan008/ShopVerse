@@ -58,3 +58,10 @@ export const validateUserSchema = z.object({
   role: z.enum(Role).default("USER"),
 });
 export type TUserFormValues = z.infer<typeof validateUserSchema>;
+
+export const validateCheckoutSchema = z.object({
+  fullName: z.string().min(1, "Full name is required"),
+  address: z.string().min(1, "Address is required"),
+  phone: z.string().min(1, "Phone is required"),
+});
+export type TCheckoutFormValues = z.infer<typeof validateCheckoutSchema>;

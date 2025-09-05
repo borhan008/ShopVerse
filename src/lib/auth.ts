@@ -24,7 +24,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           where: { email: credentials.email as string },
         });
 
-        console.log(res);
+        // console.log(res);
         if (!res) {
           return null;
         }
