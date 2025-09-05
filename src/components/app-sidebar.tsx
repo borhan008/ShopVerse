@@ -92,7 +92,6 @@ export function AppSidebar() {
               <DropdownMenuTrigger asChild>
                 <SidebarMenuButton>
                   <Avatar>
-                    <AvatarImage src="asas.png" alt="Avatar" />
                     <AvatarFallback>
                       {" "}
                       <User2 />

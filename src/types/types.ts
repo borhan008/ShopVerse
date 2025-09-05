@@ -1,4 +1,11 @@
-import { Cart, OrderStatus, Product } from "@/generated/prisma";
+import {
+  Cart,
+  Order,
+  OrderItem,
+  OrderStatus,
+  Product,
+  User,
+} from "@/generated/prisma";
 
 export type TProduct = Product;
 export type TProductFormValues = Omit<
@@ -10,3 +17,12 @@ export type TCart = Cart & {
 };
 
 export type TOrderStatusType = OrderStatus;
+
+export type OrderItemWithProduct = OrderItem & {
+  product: Product;
+};
+
+export type TOrder = Order & {
+  items: OrderItemWithProduct[];
+  user: Pick<User, "id" | "name" | "email">;
+};

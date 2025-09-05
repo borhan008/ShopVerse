@@ -7,6 +7,7 @@ import {
   TUserFormValues,
   TUserLoginFormValues,
   validateCategorySchema,
+  validateOrderStatus,
   validateProductSchema,
   validateUserLoginSchema,
 } from "@/lib/validation";
@@ -448,6 +449,97 @@ export const signUp = async (userData: TUserFormValues) => {
   }
 };
 
+export const fetchUsersAdmin = async (
+  skip: number,
+  perPage: number,
+  search?: string
+) => {
+  const session = await checkUser();
+  if (!session || session.user.role !== "ADMIN") {
+    return {
+      success: false,
+      message: "You're unauthorized.",
+      data: [],
+    };
+  }
+
+  try {
+    let where = {};
+    if (search) {
+      where = {
+        OR: [
+          { name: { contains: search || "" } },
+          { email: { contains: search || "" } },
+          { role: { contains: search || "" } },
+          { address: { contains: search || "" } },
+        ],
+      };
+    }
+    const users = await prisma.user.findMany({
+      skip: skip * perPage,
+      take: perPage,
+      where,
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        createdAt: true,
+        address: true,
+        orders: {
+          select: { total: true },
+        },
+      },
+      orderBy: {
+        id: "desc",
+      },
+    });
+
+    const total = await prisma.user.count({
+      where,
+    });
+
+    return {
+      success: true,
+      data: users || [],
+      message: "Users fetched succesfully.",
+      total: total,
+    };
+  } catch (error) {
+    return {
+      success: false,
+      message: "Something went wrong.",
+    };
+  }
+};
+
+export const deleteUserAdmin = async (id: string) => {
+  const session = await checkUser();
+  if (!session || session.user.role !== "ADMIN") {
+    return {
+      success: false,
+      message: "You're unauthorized.",
+      data: null,
+    };
+  }
+
+  try {
+    await prisma.user.delete({
+      where: { id },
+    });
+
+    return {
+      success: true,
+      message: "User deleted successfully.",
+    };
+  } catch (error) {
+    return {
+      success: false,
+      message: "Something went wrong.",
+    };
+  }
+};
+
 // Add to Cart
 export const addToCart = async (productId: number, quantity: number) => {
   const session = await checkUser();
@@ -747,6 +839,129 @@ export const fetchOrders = async () => {
     return {
       success: false,
       message: "Something went wrong.",
+    };
+  }
+};
+
+export const fetchOrdersAdmin = async (skip: number, perPage: number) => {
+  const session = await checkUser();
+  if (!session || session.user.role !== "ADMIN") {
+    return {
+      success: false,
+      message: "You're unauthorized.",
+      data: [],
+    };
+  }
+
+  try {
+    const orders = await prisma.order.findMany({
+      skip: skip * perPage,
+      take: perPage,
+
+      include: {
+        items: {
+          include: {
+            product: true,
+          },
+        },
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
+      },
+      orderBy: {
+        id: "desc",
+      },
+    });
+
+    const total = await prisma.order.count();
+
+    return {
+      success: true,
+      data: orders || [],
+      message: "Orders fetched succesfully.",
+      total: total,
+    };
+  } catch (error) {
+    return {
+      success: false,
+      message: "Something went wrong.",
+    };
+  }
+};
+
+export const updateOrderStatus = async (id: number, status: string) => {
+  const session = await checkUser();
+  if (!session || session.user.role !== "ADMIN") {
+    return {
+      success: false,
+      message: "You're unauthorized.",
+      data: null,
+    };
+  }
+
+  const validateStatus = validateOrderStatus.safeParse({ status: status });
+  if (!validateStatus.success) {
+    return {
+      success: false,
+      message: status + " Validation failed: " + validateStatus.error.message,
+      data: null,
+    };
+  }
+
+  try {
+    await prisma.order.update({
+      where: { id },
+      data: { status: validateStatus.data.status },
+    });
+
+    return {
+      success: true,
+      message: "Order status updated successfully.",
+    };
+  } catch (error) {
+    return {
+      success: false,
+      message: "Something went wrong.",
+    };
+  }
+};
+
+export const fetchUserOrderAdmin = async (id: string) => {
+  const session = await checkUser();
+  if (!session?.user || session.user.role !== "ADMIN") {
+    return {
+      success: false,
+      message: "Unauthorized",
+    };
+  }
+
+  try {
+    const res = await prisma.order.findMany({
+      where: {
+        userId: id,
+      },
+      include: {
+        items: {
+          include: {
+            product: true,
+          },
+        },
+      },
+    });
+    return {
+      success: true,
+      message: "User order fetched successfully",
+      data: res,
+    };
+  } catch (error) {
+    return {
+      success: true,
+      message: "Something went wrong",
+      data: [],
     };
   }
 };

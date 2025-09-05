@@ -27,7 +27,7 @@ export default function PaginationGeneric({
   }, [total, perPage]);
 
   return (
-    <div className="w-full mt-8">
+    <div className="mx-auto w-full mt-8">
       {total > perPage && (
         <Pagination>
           <PaginationContent>
@@ -42,7 +42,7 @@ export default function PaginationGeneric({
             </PaginationItem>
             {maxPages <= 5 ? (
               Array.from({ length: maxPages }).map((_, index) => (
-                <PaginationItem>
+                <PaginationItem key={index}>
                   <Button
                     onClick={() => setSkip(index)}
                     disabled={skip === index}

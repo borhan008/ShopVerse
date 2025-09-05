@@ -1,4 +1,4 @@
-import { Role } from "@/generated/prisma";
+import { OrderStatus, Role } from "@/generated/prisma";
 import { z } from "zod";
 
 export const validateProductSchema = z.object({
@@ -65,3 +65,7 @@ export const validateCheckoutSchema = z.object({
   phone: z.string().min(1, "Phone is required"),
 });
 export type TCheckoutFormValues = z.infer<typeof validateCheckoutSchema>;
+
+export const validateOrderStatus = z.object({
+  status: z.enum(OrderStatus).default("PENDING"),
+});
