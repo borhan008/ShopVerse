@@ -153,7 +153,6 @@ export const fetchProducts = async (
         const x = q.pop();
 
         if (!x) break;
-
         where.AND.at(0)?.category?.OR.push({ id: x });
 
         const res = await prisma.category.findMany({
@@ -161,7 +160,7 @@ export const fetchProducts = async (
             id: true,
           },
           where: {
-            parentId: x,
+            parentId: Number(x),
           },
         });
 
@@ -470,7 +469,6 @@ export const fetchUsersAdmin = async (
         OR: [
           { name: { contains: search || "" } },
           { email: { contains: search || "" } },
-          { role: { contains: search || "" } },
           { address: { contains: search || "" } },
         ],
       };
@@ -478,7 +476,7 @@ export const fetchUsersAdmin = async (
     const users = await prisma.user.findMany({
       skip: skip * perPage,
       take: perPage,
-      where,
+      where: where,
       select: {
         id: true,
         name: true,
@@ -506,6 +504,8 @@ export const fetchUsersAdmin = async (
       total: total,
     };
   } catch (error) {
+    console.log(error);
+
     return {
       success: false,
       message: "Something went wrong.",

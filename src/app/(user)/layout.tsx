@@ -22,10 +22,10 @@ export default async function Layout({
     <UserProductContextProvider
       category={categories.sortedCategories}
       initialProducts={initialProducts}
-      total={total}
+      totalProducts={total}
       unsortedCategory={categories.categories}
     >
-      <div className="p-5">{children}</div>
+      <div className="">{children}</div>
     </UserProductContextProvider>
   );
 }

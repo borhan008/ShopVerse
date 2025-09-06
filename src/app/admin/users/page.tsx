@@ -23,6 +23,9 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useEffect, useState } from "react";
+import { toast } from "sonner";
+import { Label } from "@radix-ui/react-label";
+import { Input } from "@/components/ui/input";
 
 type TUserData = Omit<User, "password" | "updatedAt"> & {
   orders: {
@@ -36,7 +39,7 @@ export default function Page() {
   const [skip, setSkip] = useState(0);
   const [totalUsers, setTotalUsers] = useState(0);
   const [selectedUser, setSelectedUser] = useState<string | null>(null);
-  const [selectDeleteUser, setSelectDeleteUser] = useState<string>(null);
+  const [selectDeleteUser, setSelectDeleteUser] = useState<string>("");
 
   useEffect(() => {
     const fetchData = async () => {
@@ -49,7 +52,27 @@ export default function Page() {
 
   return (
     <div>
-      <H1>Users Management</H1>
+      <div className="flex justify-between items-center">
+        <H1>Users Management</H1>
+
+        <form
+          className="my-4 flex items-center gap-4"
+          action={async (data: FormData) => {
+            if (!data.get("search")) return;
+            setSkip(0);
+            const res = await fetchUsersAdmin(
+              0,
+              perPage,
+              String(data.get("search"))
+            );
+            console.log(res);
+            if (res?.data) setData(res.data);
+          }}
+        >
+          <Input type="text" min={1} name="search" />
+          <Button type="submit">Search</Button>
+        </form>
+      </div>
 
       <Table className="w-full my-8">
         <TableHeader className="bg-zinc-100">
@@ -133,9 +156,14 @@ export default function Page() {
                   const res = await deleteUserAdmin(selectDeleteUser);
                   if (res?.success) {
                     setData((prev) =>
-                      prev.filter((user) => user.id !== selectDeleteUser)
+                      prev
+                        ? prev.filter((user) => user.id !== selectDeleteUser)
+                        : null
                     );
                     setSelectDeleteUser("");
+                    toast.success("User deleted successfully");
+                  } else {
+                    toast.error(res?.message || "Something went wrong");
                   }
                 }}
               >
